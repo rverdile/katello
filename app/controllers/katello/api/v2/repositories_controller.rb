@@ -2,7 +2,15 @@ module Katello
   class Api::V2::RepositoriesController < Api::V2::ApiController # rubocop:disable Metrics/ClassLength
     include Katello::Concerns::FilteredAutoCompleteSearch
 
-    wrap_parameters :repository, :include => RootRepository.attribute_names.concat([:ignore_global_proxy])
+    generic_repo_wrap_params = []
+    RepositoryTypeManager.repository_types.each do |_, type|
+      type.generic_remote_options.each do |option|
+        generic_repo_wrap_params << option.name
+      end
+    end
+    repo_wrap_params = RootRepository.attribute_names.concat([:ignore_global_proxy]) + generic_repo_wrap_params
+
+    wrap_parameters :repository, :include => repo_wrap_params
 
     CONTENT_CREDENTIAL_GPG_KEY_TYPE = "gpg_key".freeze
     CONTENT_CREDENTIAL_SSL_CA_CERT_TYPE = "ssl_ca_cert".freeze
@@ -43,6 +51,11 @@ module Katello
       param :checksum_type, String, :desc => N_("Checksum of the repository, currently 'sha1' & 'sha256' are supported")
       param :docker_upstream_name, String, :desc => N_("Name of the upstream docker repository")
       param :docker_tags_whitelist, Array, :desc => N_("Comma-separated list of tags to sync for Container Image repository")
+      RepositoryTypeManager.repository_types.each do |_, type|
+        type.generic_remote_options.each do |option|
+          param option.name, option.type, :desc => N_(option.description)
+        end
+      end
       param :download_policy, ["immediate", "on_demand"], :desc => N_("download policy for yum repos (either 'immediate' or 'on_demand')")
       param :download_concurrency, :number, :desc => N_("Used to determine download concurrency of the repository in pulp3. Use value less than 20. Defaults to 10")
       param :mirror_on_sync, :bool, :desc => N_("true if this repository when synced has to be mirrored from the source and stale rpms removed")
@@ -438,6 +451,7 @@ module Katello
       end
     end
 
+    # rubocop:disable Metrics/CyclomaticComplexity
     def repository_params
       keys = [:download_policy, :mirror_on_sync, :arch, :verify_ssl_on_sync, :upstream_password, :upstream_username, :download_concurrency,
               :ostree_upstream_sync_depth, :ostree_upstream_sync_policy, {:os_versions => []},
@@ -448,6 +462,20 @@ module Katello
       keys += [{:docker_tags_whitelist => []}, :docker_upstream_name] if params[:action] == 'create' || @repository&.docker?
       keys += [:ansible_collection_requirements, :ansible_collection_auth_url, :ansible_collection_auth_token] if params[:action] == 'create' || @repository&.ansible_collection?
       keys += [:label, :content_type] if params[:action] == "create"
+
+      if params[:action] == 'create' || @repository&.generic?
+        RepositoryTypeManager.repository_types.each do |_, type|
+          type.generic_remote_options.each do |option|
+            if option.type == Array
+              keys += [{option.name => []}]
+            elsif option.type == Hash
+              keys += [{option.name => {}}]
+            else
+              keys += [option.name]
+            end
+          end
+        end
+      end
       if params[:action] == 'create' || @repository.custom?
         keys += [:url, :gpg_key_id, :ssl_ca_cert_id, :ssl_client_cert_id, :ssl_client_key_id, :unprotected, :name,
                  :checksum_type]
@@ -465,8 +493,8 @@ module Katello
       credential_value
     end
 
-    # rubocop:disable Metrics/CyclomaticComplexity
     # rubocop:disable Metrics/PerceivedComplexity
+    # rubocop:disable Metrics/MethodLength
     def construct_repo_from_params(repo_params) # rubocop:disable Metrics/AbcSize
       root = @product.add_repo(repo_params.slice(:label, :name, :description, :url, :content_type, :arch, :unprotected,
                                                             :gpg_key, :ssl_ca_cert, :ssl_client_cert, :ssl_client_key,
@@ -481,6 +509,16 @@ module Katello
       root.http_proxy_policy = repo_params[:http_proxy_policy] if repo_params.key?(:http_proxy_policy)
       root.http_proxy_id = repo_params[:http_proxy_id] if repo_params.key?(:http_proxy_id)
       root.os_versions = repo_params.fetch(:os_versions, []) if root.yum?
+
+      if root.generic?
+        generic_remote_options = {}
+        RepositoryTypeManager.repository_types.each do |_, type|
+          type.generic_remote_options.each do |option|
+            generic_remote_options[option.name] = repo_params[option.name]
+          end
+        end
+        root.generic_remote_options = generic_remote_options.to_json
+      end
 
       if root.ostree?
         root.ostree_upstream_sync_policy = repo_params[:ostree_upstream_sync_policy]
