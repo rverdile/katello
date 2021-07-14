@@ -1,5 +1,4 @@
 require "katello_test_helper"
-
 module Katello
   class Api::V2::FileUnitsControllerTest < ActionController::TestCase
     include Support::ForemanTasks::Task

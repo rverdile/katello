@@ -13,7 +13,14 @@ module Katello
 
       def self.content_api_create(opts = {})
         relative_path = opts.delete(:relative_path)
-        self.content_api.create(relative_path, opts)
+
+        if opts[:unit_type_id] == 'generic'
+          repository = ::Katello::Repository.find(opts[:repository_id])
+          content_type = opts[:content_type]
+          self.content_api(repository.repository_type, content_type).create(relative_path, opts)
+        else
+          self.content_api.create(relative_path, opts)
+        end
       end
 
       def self.create_content

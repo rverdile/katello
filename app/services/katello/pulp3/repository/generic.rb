@@ -2,6 +2,8 @@ module Katello
   module Pulp3
     class Repository
       class Generic < ::Katello::Pulp3::Repository
+        attr_accessor :input
+
         def copy_content_for_source(source_repository, _options = {})
           copy_units_by_href(source_repository.files.pluck(:pulp_id))
         end

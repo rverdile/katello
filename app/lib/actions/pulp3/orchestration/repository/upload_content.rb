@@ -4,11 +4,16 @@ module Actions
       module Repository
         class UploadContent < Pulp3::Abstract
           include Actions::Helpers::OutputPropagator
-          def plan(repository, smart_proxy, file, unit_type_id)
+          def plan(repository, smart_proxy, file, unit_type_id, generic_content_type = nil)
             sequence do
               content_backend_service = SmartProxy.pulp_primary.content_service(unit_type_id)
-              content_list = content_backend_service.content_api.list("sha256": Digest::SHA256.hexdigest(File.read(file[:path])))
-              content_href = content_list&.results&.first&.pulp_href
+              if repository.generic?
+                content_list = content_backend_service.content_api(repository.repository_type, generic_content_type).list.results.find { |result| result.sha256 == Digest::SHA256.hexdigest(File.read(file[:path])) }
+                content_href = content_list.pulp_href
+              else
+                content_list = content_backend_service.content_api.list("sha256": Digest::SHA256.hexdigest(File.read(file[:path])))
+                content_href = content_list&.results&.first&.pulp_href
+              end
 
               unless content_href
                 upload_action_output = plan_action(Pulp3::Repository::UploadFile, repository, smart_proxy, file[:path]).output

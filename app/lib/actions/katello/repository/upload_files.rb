@@ -1,18 +1,19 @@
 # rubocop:disable Lint/SuppressedException
 require 'fileutils'
 require 'English'
-
+require 'pry'
 module Actions
   module Katello
     module Repository
       class UploadFiles < Actions::EntryAction
         include Actions::Katello::PulpSelector
-        def plan(repository, files, content_type = nil, options = {})
+        def plan(repository, files, content_type = nil, generic_content_type = nil, options = {})
           action_subject(repository)
           repository.clear_smart_proxy_sync_histories
           tmp_files = prepare_tmp_files(files)
 
           content_type ||= ::Katello::RepositoryTypeManager.find(repository.content_type).default_managed_content_type.label
+          generic_content_type ||= ::Katello::RepositoryTypeManager.find(repository.content_type).default_managed_content_type.content_type if repository.generic?
           unit_type_id = SmartProxy.pulp_primary.content_service(content_type)::CONTENT_TYPE
           upload_actions = []
 
@@ -23,7 +24,7 @@ module Actions
               tmp_files.each do |file|
                 sequence do
                   upload_action = plan_action(Pulp3::Orchestration::Repository::UploadContent,
-                                                   repository, SmartProxy.pulp_primary!, file, unit_type_id)
+                                                   repository, SmartProxy.pulp_primary!, file, unit_type_id, generic_content_type)
 
                   upload_actions << upload_action.output
                 end

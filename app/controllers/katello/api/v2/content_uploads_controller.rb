@@ -1,3 +1,4 @@
+require 'pry'
 module Katello
   class Api::V2::ContentUploadsController < Api::V2::ApiController
     before_action :find_repository
@@ -5,16 +6,20 @@ module Katello
 
     include ::Foreman::Controller::FilterParameters
     filter_parameters :content
-
     api :POST, "/repositories/:repository_id/content_uploads", N_("Create an upload request")
     param :repository_id, :number, :required => true, :desc => N_("repository id")
     param :size, :number, :required => true, :desc => N_("Size of file to upload")
     param :checksum, String, :required => false, :desc => N_("Checksum of file to upload")
     param :content_type, RepositoryTypeManager.uploadable_content_types.map(&:label), :required => false, :desc => N_("content type ('deb', 'docker_manifest', 'file', 'ostree', 'rpm', 'srpm')")
+    param :generic_content_type, String, :required => false, :desc => N_("Content type for generic content unit")
     def create
       content_type = params[:content_type] || ::Katello::RepositoryTypeManager.find(@repository.content_type).default_managed_content_type.label
+      if content_type == "generic"
+        params.require(:generic_content_type)
+        generic_content_type = params[:generic_content_type]
+      end
       unit_type_id = SmartProxy.pulp_primary.content_service(content_type).content_type
-      render :json => @repository.backend_content_service(::SmartProxy.pulp_primary).create_upload(params[:size], params[:checksum], unit_type_id)
+      render :json => @repository.backend_content_service(::SmartProxy.pulp_primary).create_upload(params[:size], params[:checksum], unit_type_id, generic_content_type, @repository)
     end
 
     api :PUT, "/repositories/:repository_id/content_uploads/:id", N_("Upload a chunk of the file's content")

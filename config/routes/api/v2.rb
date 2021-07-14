@@ -274,6 +274,13 @@ Katello::Engine.routes.draw do
           end
         end
 
+        api_resources :generic, :only => [:index, :show], :controller => 'generic_content_units' do
+          collection do
+            get :auto_complete_search
+            get :compare
+          end
+        end
+
         match "/ping" => "katello_ping#index", :via => :get
         match "/status" => "katello_ping#server_status", :via => :get
 
@@ -391,6 +398,7 @@ Katello::Engine.routes.draw do
           api_resources :debs, :only => [:index, :show]
           api_resources :module_streams, :only => [:index, :show]
           api_resources :ansible_collections, :only => [:index, :show]
+          api_resources :generic, :only => [:index, :show], :controller => 'generic_content_units'
 
           api_resources :ostree_branches, :only => [:index, :show]
 

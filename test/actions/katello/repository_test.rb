@@ -306,6 +306,55 @@ module ::Actions::Katello::Repository
     end
   end
 
+  class UploadPythonTest < TestBase
+    setup { FactoryBot.create(:smart_proxy, :default_smart_proxy) }
+    let(:pulp3_action_class) { ::Actions::Pulp3::Orchestration::Repository::UploadContent }
+    it 'plans for Pulp3 without duplicate' do
+      proxy.stubs(:content_service).returns(stub(:content_api => stub(:list => stub(:results => nil))))
+      action = create_action pulp3_action_class
+      file = File.join(::Katello::Engine.root, "test", "fixtures", "files", "shelf_reader-0.1-py2-none-any.whl")
+      action.execution_plan.stub_planned_action(::Actions::Pulp3::Repository::UploadFile) do |content_create|
+        content_create.stubs(output: { pulp_tasks: [{href: "demo_task/href"}] })
+      end
+      action.execution_plan.stub_planned_action(::Actions::Pulp3::Repository::SaveArtifact) do |save_artifact|
+        save_artifact.stubs(output: { pulp_tasks: [{href: "demo_task/artifact_href"}] })
+      end
+      action.execution_plan.stub_planned_action(::Actions::Pulp3::Repository::ImportUpload) do |import_upload|
+        import_upload.stubs(output: { pulp_tasks: [{href: "demo_task/version_href"}] })
+      end
+
+      plan_action action, repository_pulp3, proxy, {:path => file, :filename => 'shelf_reader-0.1-py2-none-any.whl'}, 'generic', 'python_package'
+      assert_action_planed_with(action, ::Actions::Pulp3::Repository::UploadFile,
+                                repository_pulp3, proxy, file)
+      assert_action_planed_with(action, ::Actions::Pulp3::Repository::SaveArtifact,
+                                {:path => file, :filename => 'shelf_reader-0.1-py2-none-any.whl'},
+                                repository_pulp3, proxy,
+                                [{href: "demo_task/href"}],
+                                "generic")
+      assert_action_planed_with(action, ::Actions::Pulp3::Repository::ImportUpload,
+                                [{href: "demo_task/artifact_href"}], repository_pulp3, proxy)
+      assert_action_planed_with(action, ::Actions::Pulp3::Repository::SaveVersion,
+                                repository_pulp3,
+                                tasks: [{href: "demo_task/version_href"}])
+    end
+
+    it 'plans for Pulp3 with duplicate' do
+      proxy.stubs(:content_service).returns(stub(:content_api => stub(:list => stub(:results => [stub(:pulp_href => "demo_content/href")]))))
+      action = create_action pulp3_action_class
+      file = File.join(::Katello::Engine.root, "test", "fixtures", "files", "shelf_reader-0.1-py2-none-any.whl")
+      action.execution_plan.stub_planned_action(::Actions::Pulp3::Repository::ImportUpload) do |import_upload|
+        import_upload.stubs(output: { pulp_tasks: [{href: "demo_task/version_href"}] })
+      end
+
+      plan_action action, repository_pulp3, proxy, {:path => file, :filename => 'shelf_reader-0.1-py2-none-any.whl'}, 'generic', 'python_package'
+      assert_action_planed_with(action, ::Actions::Pulp3::Repository::ImportUpload,
+                                "demo_content/href", repository_pulp3, proxy)
+      assert_action_planed_with(action, ::Actions::Pulp3::Repository::SaveVersion,
+                                repository_pulp3,
+                                tasks: [{href: "demo_task/version_href"}])
+    end
+  end
+
   class UploadDockerTest < TestBase
     let(:action_class) { ::Actions::Katello::Repository::ImportUpload }
     setup { SmartProxy.stubs(:pulp_primary).returns(SmartProxy.new) }

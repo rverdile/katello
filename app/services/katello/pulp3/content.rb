@@ -4,12 +4,18 @@ module Katello
     class Content
       extend Katello::Abstract::Pulp::Content
       class << self
-        def create_upload(size = 0, checksum = nil, content_type = nil)
+        def create_upload(size = 0, checksum = nil, content_type = nil, generic_content_type = nil, repository = nil)
           content_unit_href = nil
           if checksum
             content_backend_service = SmartProxy.pulp_primary.content_service(content_type)
-            content_list = content_backend_service.content_api.list("sha256": checksum)
-            content_unit_href = content_list.results.first.pulp_href unless content_list.results.empty?
+            if repository.generic?
+              # pulp python doesn't support filter by sha256 (i.e. list method), so need to get the result differently
+              content_list = content_backend_service.content_api(repository.repository_type, generic_content_type).list.results.find { |result| result.sha256 == checksum }
+              content_unit_href = content_list.pulp_href unless content_list.nil?
+            else
+              content_list = content_backend_service.content_api.list("sha256": checksum)
+              content_unit_href = content_list.results.first.pulp_href unless content_list.results.empty?
+            end
             return {"content_unit_href" => content_unit_href} if content_unit_href
           end
           upload_href = uploads_api.create(upload_class.new(size: size)).pulp_href

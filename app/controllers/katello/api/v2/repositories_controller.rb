@@ -350,6 +350,7 @@ module Katello
     param :id, :number, :required => true, :desc => N_("repository ID")
     param :content, File, :required => true, :desc => N_("Content files to upload. Can be a single file or array of files.")
     param :content_type, RepositoryTypeManager.uploadable_content_types.map(&:label), :required => false, :desc => N_("content type ('deb', 'docker_manifest', 'file', 'ostree', 'rpm', 'srpm')")
+    param :generic_content_type, String, :required => false, :desc => N_("Content type for generic content unit")
     def upload_content
       fail Katello::Errors::InvalidRepositoryContent, _("Cannot upload Container Image content.") if @repository.docker?
 
@@ -358,7 +359,7 @@ module Katello
       end
 
       if !filepaths.blank?
-        sync_task(::Actions::Katello::Repository::UploadFiles, @repository, filepaths, params[:content_type])
+        sync_task(::Actions::Katello::Repository::UploadFiles, @repository, filepaths, params[:content_type], params[:generic_content_type])
         render :json => {:status => "success", :filenames => filepaths.map { |item| item[:filename] }}
       else
         fail HttpErrors::BadRequest, _("No file uploaded")

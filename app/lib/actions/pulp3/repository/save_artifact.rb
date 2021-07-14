@@ -11,7 +11,11 @@ module Actions
           artifact_href = input[:tasks].last[:created_resources].first
           content_type = input[:unit_type_id]
           content_backend_service = SmartProxy.pulp_primary.content_service(content_type)
-          output[:pulp_tasks] = [content_backend_service.content_api_create(relative_path: input[:options][:file_name], artifact: artifact_href)]
+          output[:pulp_tasks] = [content_backend_service.content_api_create(relative_path: input[:options][:file_name],
+                                                                            artifact: artifact_href,
+                                                                            repository_id: input[:repository_id],
+                                                                            content_type: input[:options][:content_type],
+                                                                            unit_type_id: input[:unit_type_id])]
         end
       end
     end

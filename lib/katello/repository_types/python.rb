@@ -34,4 +34,5 @@ Katello::RepositoryTypeManager.register('python') do
                        pulp3_service_class: Katello::Pulp3::GenericContentUnit,
                        removable: true,
                        uploadable: true
+  default_managed_content_type Katello::GenericContentUnit
 end
